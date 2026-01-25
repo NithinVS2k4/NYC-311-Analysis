@@ -1,0 +1,14 @@
+# secrets
+env.json
+
+# data artifacts
+Data/
+!Data/.gitkeep
+
+# python junk
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
