@@ -51,7 +51,7 @@ def get_311_data(
         pd.DataFrame: DataFrame object containing all the fetched data.
     """
 
-    # columns we want to grab from dataframe
+    # Columns to be taken
     SUBFIELDS = [
         "unique_key",
         "created_date",
@@ -87,30 +87,25 @@ def get_311_data(
     ]
 
     print("Establishing Source...")
-    # establish client source
     client = Socrata("data.cityofnewyork.us", app_token, timeout=300)
 
     data = []
     print("Obtaining Data...")
-    for offs in range(
-        0, 48001, 2000
-    ):  # will cycle through 50000 entries when limit is 2000
-        # Collect results offset by 2000, returned as JSON from API / converted to Python list of
-        # dictionaries by sodapy.
+    for offs in range(0, 48001, 2000):
+        # For 25 sweeps, `limit` rows are collected. Each sweep is seperated by an offset of 2000.
         print(f"\r{offs}", end="")
+
         results = client.get(
             "erm2-nwe9",
             limit=limit,
             offset=offs,
-            # looks for only NYPD agencies, closed requests, before Feb 2020
+            # Take only NYPD agencies with closed requests, before `data_max`
             where=f"agency = 'NYPD' and status = 'Closed' and created_date < '{date_max}'",
             order="created_date desc",
-        )  # takes from most recent
+        )
 
-        # Convert to pandas DataFrame
         results_df = pd.DataFrame.from_records(results, columns=SUBFIELDS)
 
-        # add df to list
         data.append(results_df)
         time.sleep(3)
     print()
@@ -118,10 +113,8 @@ def get_311_data(
     full = pd.concat(data)
     full.reset_index(inplace=True)
 
-    # cleaning & engineering features
-    full["created_date"] = pd.to_datetime(
-        full["created_date"]
-    )  # change type to datetime
+    # Basic feature engineering
+    full["created_date"] = pd.to_datetime(full["created_date"])
     full["closed_date"] = pd.to_datetime(full["closed_date"])
     full["waittime"] = full["closed_date"] - full["created_date"]
     full["waittime"] = full["waittime"].map(conv_to_days)
