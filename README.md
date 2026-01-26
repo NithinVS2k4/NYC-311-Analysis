@@ -61,7 +61,7 @@ Key characteristics:
 - Stores **operational attributes only**
 
 ### ER Diagram
-![OLAP ER Diagram](Assets/OLAP_ER.png)
+![OLTP ER Diagram](Assets/OLTP_ER.png)
 
 ---
 
