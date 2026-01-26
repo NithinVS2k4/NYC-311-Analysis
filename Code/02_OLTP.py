@@ -1,6 +1,3 @@
-from calendar import c
-from urllib import request
-from xmlrpc.client import INVALID_XMLRPC
 import pandas as pd
 import os
 import sqlite3 as sq3
@@ -91,10 +88,10 @@ def create_schema(conn: sq3.Connection):
 def check_table(conn: sq3.Connection, table_name: str):
     cur = conn.cursor()
     cur.execute(
-        """
+        f"""
     SELECT name
     FROM sqlite_master
-    WHERE type='table' AND name='service_request';
+    WHERE type='table' AND name='{table_name}';
     """
     )
 
