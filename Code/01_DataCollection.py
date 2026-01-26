@@ -10,30 +10,6 @@ import seaborn as sns
 import os
 
 
-def conv_to_days(waittime: pd.Timedelta) -> float | None:  # must be a timedelta type
-    """Convert wait times to days
-
-    Args:
-        waittime (pd.Timedelta): Time difference between closing and created date
-
-    Returns:
-        float: If the waittime is a valid time delta, then return the time in days
-        None: Returned when waittime is NaT
-    """
-    try:
-        days = abs(waittime.components[0])
-        hours = waittime.components[1] / 24
-        mins = waittime.components[2] / 60 / 24
-        secs = waittime.components[3] / 60 / 60 / 24
-        if waittime.components[0] < 0:
-            return (days + hours + mins + secs) * -1
-        else:
-            return days + hours + mins + secs
-    except:
-        # if NaT, return None
-        pass
-
-
 def get_311_data(
     limit: int = 2000,
     app_token: str | None = None,
@@ -116,8 +92,6 @@ def get_311_data(
     # Basic feature engineering
     full["created_date"] = pd.to_datetime(full["created_date"])
     full["closed_date"] = pd.to_datetime(full["closed_date"])
-    full["waittime"] = full["closed_date"] - full["created_date"]
-    full["waittime"] = full["waittime"].map(conv_to_days)
 
     return full
 
