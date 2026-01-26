@@ -60,6 +60,9 @@ Key characteristics:
 - Fully normalized (3NF)
 - Stores **operational attributes only**
 
+### ER Diagram
+![OLAP ER Diagram](Assets/OLAP_ER.png)
+
 ---
 
 ## OLAP / Data Warehouse Design
@@ -88,6 +91,10 @@ The location dimension uses an abstracted representation:
 - `city`
 
 High-cardinality attributes (adress, street names, landmarks, intersections) are intentionally excluded from the OLAP schema.
+
+### ER Diagram
+
+![OLAP ER Diagram](Assets/OLAP_ER.png)
 
 ---
 
