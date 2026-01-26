@@ -1,4 +1,5 @@
 from calendar import c
+from urllib import request
 from xmlrpc.client import INVALID_XMLRPC
 import pandas as pd
 import os
@@ -53,6 +54,7 @@ def create_schema(conn: sq3.Connection):
         longitude REAL,
         x_coordinate_state_plane REAL,
         y_coordinate_state_plane REAL,
+        location_type TEXT,
         incident_address TEXT,
         street_name TEXT,
         cross_street_1 TEXT,
@@ -231,6 +233,7 @@ def add_location(conn: sq3.Connection, df: pd.DataFrame) -> None:
         longitude REAL,
         x_coordinate_state_plane REAL,
         y_coordinate_state_plane REAL,
+        location_type TEXT,
         incident_address TEXT,
         street_name TEXT,
         cross_street_1 TEXT,
@@ -253,6 +256,7 @@ def add_location(conn: sq3.Connection, df: pd.DataFrame) -> None:
             "longitude",
             "x_coordinate_state_plane",
             "y_coordinate_state_plane",
+            "location_type",
             "incident_address",
             "street_name",
             "cross_street_1",
@@ -277,25 +281,25 @@ def add_location(conn: sq3.Connection, df: pd.DataFrame) -> None:
             """
             INSERT OR IGNORE INTO location (
                 location_id, borough_id, board_id, zip, city, latitude, longitude,
-                x_coordinate_state_plane, y_coordinate_state_plane, incident_address,
-                street_name, cross_street_1, cross_street_2,
+                x_coordinate_state_plane, y_coordinate_state_plane, location_type,
+                incident_address, street_name, cross_street_1, cross_street_2,
                 intersection_street_1, intersection_street_2,
                 landmark, bbl
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """,
             (
                 location_id,
                 borough_id,
-                row["community_board"].split()[
-                    0
-                ],  # Extract board_id from "<board_id> <borough>" format
+                # Extract board_id from "<board_id> <borough>" format
+                row["community_board"].split()[0],
                 row["incident_zip"],
                 row["city"],
                 row["latitude"],
                 row["longitude"],
                 row["x_coordinate_state_plane"],
                 row["y_coordinate_state_plane"],
+                row["location_type"],
                 row["incident_address"],
                 row["street_name"],
                 row["cross_street_1"],
@@ -352,39 +356,79 @@ def add_service_request(conn: sq3.Connection, df: pd.DataFrame) -> None:
         park_map[row[1]] = row[0]
 
     location_map = {}
-    cur.execute("SELECT * FROM location;")
+
+    cur.execute(
+        """
+    SELECT
+    location_id,
+    borough_id,
+    board_id,
+    zip,
+    city,
+    latitude,
+    longitude,
+    x_coordinate_state_plane,
+    y_coordinate_state_plane,
+    incident_address,
+    street_name,
+    cross_street_1,
+    cross_street_2,
+    intersection_street_1,
+    intersection_street_2,
+    landmark,
+    bbl
+    FROM location;
+    """
+    )
+
+    def norm(x):
+        return None if pd.isna(x) else str(x)
+
+    for row in cur.fetchall():
+        location_map[tuple(list(map(norm, row[1:])))] = row[0]
+
+    borough_map = {}
+    cur.execute("SELECT borough_id, borough_name FROM borough;")
     rows = cur.fetchall()
     for row in rows:
-        location_map["/".join(list(map(str, row[1:])))] = row[0]
+        borough_map[row[1]] = row[0]
 
-    request_id = 0
-    for _, row in df.iterrows():
+    flag = False
+    for request_id, row in df.iterrows():
         agency_id = agency_map.get(row["agency"], None)
         complaint_id = complaint_map.get(row["complaint_type"], None)
         park_id = park_map.get(row["park_facility_name"], None)
-        location_id = location_map.get(
-            "/".join(
-                [
-                    str(row["borough"]),
-                    str(row["community_board"]),
-                    str(row["incident_zip"]),
-                    str(row["city"]),
-                    str(row["latitude"]),
-                    str(row["longitude"]),
-                    str(row["x_coordinate_state_plane"]),
-                    str(row["y_coordinate_state_plane"]),
-                    str(row["incident_address"]),
-                    str(row["street_name"]),
-                    str(row["cross_street_1"]),
-                    str(row["cross_street_2"]),
-                    str(row["intersection_street_1"]),
-                    str(row["intersection_street_2"]),
-                    str(row["landmark"]),
-                    str(row["bbl"]),
-                ]
+        location_key = (
+            norm(borough_map.get(row["borough"])),
+            (
+                row["community_board"].split()[0]
+                if pd.notna(row["community_board"])
+                else None
             ),
-            None,
+            norm(row["incident_zip"]),
+            norm(row["city"]),
+            norm(row["latitude"]),
+            norm(row["longitude"]),
+            norm(row["x_coordinate_state_plane"]),
+            norm(row["y_coordinate_state_plane"]),
+            norm(row["incident_address"]),
+            norm(row["street_name"]),
+            norm(row["cross_street_1"]),
+            norm(row["cross_street_2"]),
+            norm(row["intersection_street_1"]),
+            norm(row["intersection_street_2"]),
+            norm(row["landmark"]),
+            norm(row["bbl"]),
         )
+
+        location_id = location_map.get(location_key)
+        if location_id == None and not flag:
+            print("ERROR: Location not found for request_id:", request_id)
+            print("key:", location_key)
+            print("sample keys from location_map:", list(location_map.keys())[:5])
+            flag = True
+            # quit(1)
+            # break
         cur.execute(
             """
             INSERT OR IGNORE INTO service_request (
@@ -408,7 +452,6 @@ def add_service_request(conn: sq3.Connection, df: pd.DataFrame) -> None:
                 row["resolution_description"],
             ),
         )
-        request_id += 1
 
     conn.commit()
 
@@ -421,7 +464,7 @@ def add_contents(conn: sq3.Connection, df: pd.DataFrame):
                 add_agency(conn, df)
             case "borough":
                 add_borough(conn, df)
-            case "complaint_type":
+            case "complaint":
                 add_complaint_type(conn, df)
             case "park":
                 add_park(conn, df)
@@ -458,14 +501,14 @@ if __name__ == "__main__":
 
     print()
 
-    add = input("\x1b[33mClear all table contents?[Y/n]: \x1b[0m")
+    add = input("\x1b[33mAdd the table contents?[Y/n]: \x1b[0m")
     if add.lower() == "n":
         print("Exiting without adding contents.")
         quit(0)
 
     print("Reading the data...")
     data_path = os.path.join(db_dir, "requests.csv")
-    df = pd.read_csv(data_path)
+    df = pd.read_csv(data_path, index_col="unique_key")
 
     print("Adding dataframe contents to database...\n")
     add_contents(conn, df)
