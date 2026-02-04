@@ -33,6 +33,110 @@ def conv_to_days(waittime: pd.Timedelta) -> float | None:  # must be a timedelta
         pass
 
 
+def map_resolution_to_bucket(description: str) -> str:
+    """
+    Maps NYPD resolution descriptions to one of 8 OLAP buckets.
+    """
+
+    d = description.lower()
+
+    # 1. ENFORCEMENT ACTION
+    if any(
+        kw in d
+        for kw in [
+            "issued a summons",
+            "summons was issued",
+            "police issued a summons",
+            "made an arrest",
+            "police made an arrest",
+        ]
+    ):
+        return "ENFORCEMENT_ACTION"
+
+    # 2. REFERRED TO OTHER AGENCY
+    if any(
+        kw in d
+        for kw in [
+            "referred to the department of homeless services",
+            "referred to dhs",
+            "does not fall under the police department's jurisdiction",
+            "does not fall under the jurisdiction",
+            "not under the jurisdiction",
+        ]
+    ):
+        return "REFERRED_TO_OTHER_AGENCY"
+
+    # 3. UNABLE TO COMPLETE INVESTIGATION
+    if any(
+        kw in d
+        for kw in [
+            "unable to gain entry",
+            "insufficient contact information",
+            "cannot be processed at this time",
+            "can not be processed at this time",
+        ]
+    ):
+        return "UNABLE_TO_COMPLETE_INVESTIGATION"
+
+    # 4. PENDING / INCOMPLETE
+    if any(
+        kw in d
+        for kw in [
+            "has been received and assigned",
+            "additional information will be available later",
+            "complaint has been received",
+        ]
+    ):
+        return "PENDING_INCOMPLETE"
+
+    # 5. ADMINISTRATIVE / INFORMATIONAL
+    if any(
+        kw in d
+        for kw in [
+            "a report was prepared",
+            "police department reviewed your complaint",
+            "provided additional information",
+        ]
+    ):
+        return "ADMINISTRATIVE_INFORMATIONAL"
+
+    # 6. CONDITION RESOLVED WITHOUT ENFORCEMENT
+    if any(
+        kw in d
+        for kw in [
+            "condition was corrected",
+            "took action to fix the condition",
+            "those responsible for the condition were gone",
+            "requested a tow truck",
+            "another specific tow is required",
+        ]
+    ):
+        return "CONDITION_RESOLVED_NO_ENFORCEMENT"
+
+    # 7. POLICE RESPONSE — NO ACTION NECESSARY
+    if any(
+        kw in d
+        for kw in ["police action was not necessary", "tow request was not necessary"]
+    ):
+        return "POLICE_RESPONSE_NO_ACTION"
+
+    # 8. NO VIOLATION FOUND
+    if any(
+        kw in d
+        for kw in [
+            "observed no criminal violation",
+            "no evidence of a criminal violation",
+            "no evidence of the violation",
+            "observed no encampment",
+            "no encampment was found",
+        ]
+    ):
+        return "NO_VIOLATION_FOUND"
+
+    # Fallback
+    return "NO_VIOLATION_FOUND"
+
+
 class Printer:
     def __init__(self):
         self.msg = None
@@ -131,6 +235,10 @@ if __name__ == "__main__":
     df = df[df["waittime"] >= 0]
     printer.ping()
 
+    printer("Filtering rows with invalid descriptions...")
+    df = df.dropna(subset=["resolution_description"])
+    printer.ping()
+
     print()
     print(f"{df.shape[0]} Rows, {df.shape[1]} Columns")
 
@@ -142,7 +250,7 @@ if __name__ == "__main__":
         if na_counts[col] == 0:  # type:ignore
             continue
         print(
-            f"{col:<35} {na_counts[col]:<12} {na_counts[col]/df.shape[0]:.2%}"
+            f"{col:<35} {na_counts[col]:<12} {na_counts[col]/df.shape[0]:.2%}"  # type:ignore
         )  # type:ignore
 
     print()
@@ -217,10 +325,14 @@ if __name__ == "__main__":
     print(df.head())
     print()
 
-    print("Creating boolean column for precise location availability...")
+    printer("Creating boolean column for precise location availability...")
     df["has_precise_location"] = df["latitude"].notna()
+    printer.ping()
 
-    print()
+    printer("Creating resolution_type for categorizing resolution_description")
+    df["resolution_type"] = df["resolution_description"].apply(map_resolution_to_bucket)
+    printer.ping()
+
     printer("Saving processed dataset...")
     df_clean = df.copy()
     base_dir = os.path.abspath(os.getcwd())
