@@ -4,6 +4,7 @@ env.json
 # data artifacts
 Data/
 !Data/.gitkeep
+resolution_descriptions.txt
 
 # python junk
 __pycache__/
