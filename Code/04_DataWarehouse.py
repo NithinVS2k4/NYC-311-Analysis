@@ -8,6 +8,7 @@ OLAP_SCHEMA_TABLES = [
     "dim_complaint",
     "dim_date",
     "dim_channel",
+    "dim_resolution",
     "dim_location",
     "fact_service_request",
 ]
@@ -51,6 +52,11 @@ def create_schema(conn: sq3.Connection):
         channel_name TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS dim_resolution (
+        resolution_key INTEGER PRIMARY KEY,
+        resolution_type TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS dim_location (
         location_key INTEGER PRIMARY KEY,
         location_type TEXT NOT NULL,   -- ADDRESS / INTERSECTION / UNKNOWN
@@ -72,6 +78,7 @@ def create_schema(conn: sq3.Connection):
         complaint_key INTEGER,
         location_key INTEGER,
         channel_key INTEGER,
+        resolution_key INTEGER,
 
         wait_time_hours REAL NOT NULL,
         wait_time_days REAL NOT NULL,
@@ -80,7 +87,8 @@ def create_schema(conn: sq3.Connection):
         FOREIGN KEY (agency_key) REFERENCES dim_agency(agency_key),
         FOREIGN KEY (complaint_key) REFERENCES dim_complaint(complaint_key),
         FOREIGN KEY (location_key) REFERENCES dim_location(location_key),
-        FOREIGN KEY (channel_key) REFERENCES dim_channel(channel_key)
+        FOREIGN KEY (channel_key) REFERENCES dim_channel(channel_key),
+        FOREIGN KEY (resolution_key) REFERENCES dim_resolution(resolution_key)
     );
     """
     cur.executescript(olap_schema)
@@ -232,6 +240,26 @@ def add_channel(conn: sq3.Connection, df: pd.DataFrame) -> None:
     conn.commit()
 
 
+def add_resolution(conn: sq3.Connection, df: pd.DataFrame) -> None:
+    """
+    dim_resolution (
+        resolution_key INTEGER PRIMARY KEY,
+        resolution_type TEXT NOT NULL
+    );
+    """
+    cur = conn.cursor()
+    for resolution_id, resolution_type in enumerate(df["resolution_type"].unique()):
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO dim_resolution (resolution_key, resolution_type)
+            VALUES (?, ?);
+            """,
+            (resolution_id, resolution_type),
+        )
+
+    conn.commit()
+
+
 def add_location(conn: sq3.Connection, df: pd.DataFrame) -> None:
     """
     dim_location (
@@ -342,7 +370,7 @@ def add_service_request(conn: sq3.Connection, df: pd.DataFrame) -> None:
                 row["location_type"],
                 row["board_id"],
                 row["borough_name"],
-                row["zip"],
+                str(row["zip"]),
                 row["city"],
             ),
             None,
@@ -387,6 +415,8 @@ def add_contents(conn: sq3.Connection, df: pd.DataFrame):
                 add_complaint_type(conn, df)
             case "dim_channel":
                 add_channel(conn, df)
+            case "dim_resolution":
+                add_resolution(conn, df)
             case "dim_location":
                 add_location(conn, df)
             case "fact_service_request":
