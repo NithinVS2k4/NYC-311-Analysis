@@ -314,6 +314,7 @@ def add_service_request(conn: sq3.Connection, df: pd.DataFrame) -> None:
         complaint_key INTEGER,
         location_key INTEGER,
         channel_key INTEGER,
+        resolution_key INTEGER,
 
         wait_time_hours REAL NOT NULL,
         wait_time_days REAL NOT NULL,
@@ -322,7 +323,8 @@ def add_service_request(conn: sq3.Connection, df: pd.DataFrame) -> None:
         FOREIGN KEY (agency_key) REFERENCES dim_agency(agency_key),
         FOREIGN KEY (complaint_key) REFERENCES dim_complaint(complaint_key),
         FOREIGN KEY (location_key) REFERENCES dim_location(location_key),
-        FOREIGN KEY (channel_key) REFERENCES dim_channel(channel_key)
+        FOREIGN KEY (channel_key) REFERENCES dim_channel(channel_key),
+        FOREIGN KEY (resolution_key) REFERENCES dim_resolution(resolution_key)
     );
     """
     cur = conn.cursor()
@@ -360,6 +362,12 @@ def add_service_request(conn: sq3.Connection, df: pd.DataFrame) -> None:
     for row in rows:
         channel_map[row[1]] = row[0]
 
+    resolution_map = {}
+    cur.execute("SELECT resolution_key, resolution_type FROM dim_resolution;")
+    rows = cur.fetchall()
+    for row in rows:
+        resolution_map[row[1]] = row[0]
+
     for fact_id, row in df.iterrows():
         created_date = pd.to_datetime(row["created_timestamp"]).date().isoformat()
         date_key = date_map[created_date]
@@ -376,6 +384,7 @@ def add_service_request(conn: sq3.Connection, df: pd.DataFrame) -> None:
             None,
         )
         channel_key = channel_map[row["channel"]]
+        resolution_key = resolution_map[row["resolution_type"]]
 
         wait_time_hours = row["waittime"] * 24
         wait_time_days = row["waittime"]
@@ -384,9 +393,9 @@ def add_service_request(conn: sq3.Connection, df: pd.DataFrame) -> None:
             """
             INSERT INTO fact_service_request (
                 fact_id, date_key, agency_key, complaint_key, location_key,
-                channel_key, wait_time_hours, wait_time_days
+                channel_key, resolution_key, wait_time_hours, wait_time_days
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
             """,
             (
                 fact_id,
@@ -395,6 +404,7 @@ def add_service_request(conn: sq3.Connection, df: pd.DataFrame) -> None:
                 complaint_key,
                 location_key,
                 channel_key,
+                resolution_key,
                 wait_time_hours,
                 wait_time_days,
             ),
