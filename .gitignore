@@ -13,3 +13,6 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# report (temporary ignore)
+DataWarehousing_Project_Report_v3.pdf
